@@ -1,0 +1,66 @@
+<link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css> <style>
+body {
+font-family: "Roboto",Roboto;
+font-size: 10px;
+}
+.container {
+padding-right: 5px;
+padding-left: 10px;
+margin-right: initial;
+margin-left: initial;
+}
+tr th {
+cursor: pointer;
+}
+.search {
+margin: 10px 0 5px 0;
+}
+.square {
+border-radius: 0 !important;
+}
+.wrapper {
+min-height: 95%;
+min-height: 95vh;
+display: flex;
+}
+@-webkit-keyframes scaleout {
+0% { -webkit-transform: scale(0.0) }
+100% {
+-webkit-transform: scale(1.0);
+opacity: 0;
+}
+}
+@keyframes scaleout {
+0% {
+transform: scale(0.0);
+-webkit-transform: scale(0.0);
+} 100% {
+transform: scale(1.0);
+-webkit-transform: scale(1.0);
+opacity: 0;
+}
+}
+#footer {
+margin-bottom: 10px;
+}
+.panel {
+position: absolute;
+opacity: 0.85;
+transition: all 0.6s ease-in-out;
+z-index: 10000;
+}
+.panel:hover {
+opacity: 1;
+}
+.panel img {
+width: 100px;
+height: 100px;
+}
+h3 {
+text-align: left;
+}
+a img {
+width: 28px;
+height: 28px;
+}
+</style>

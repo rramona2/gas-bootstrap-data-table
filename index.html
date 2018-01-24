@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<?!= require('css'); ?>
+<?!= require('js'); ?>
+<style>
+body {
+    font-family: "Roboto",Roboto;
+    font-size: 10px;
+    }
+</style>
+<div ng-app="app" ng-controller="MainCtrl">
+  <div class="wrapper" ng-class="!gotData?'wrapper':'hidden'">
+    <div class="spinner"></div>
+  </div>
+  <div class="hidden" ng-class="gotData?'container':'hidden'">
+    <h4>
+    <a href="https://lh3.googleusercontent.com/-AEQ0rpjmn3k/WhwNPlxSuWI/AAAAAAAACH8/uqHYvCQzbGITpcu9lW8bhCUGXPgrsgRtQCEwYBhgL/w140-h140-p/cartoon.png" target="_blank" title="Google"><img src="https://lh3.googleusercontent.com/-AEQ0rpjmn3k/WhwNPlxSuWI/AAAAAAAACH8/uqHYvCQzbGITpcu9lW8bhCUGXPgrsgRtQCEwYBhgL/w140-h140-p/cartoon.png"></a>
+    </h4>
+    <div class="search" ng-repeat="sh in sheets track by $index" ng-if="tab==$index">
+      <form role="form">
+        <div class="input-group">
+          <span class="input-group-addon" title="{{sh.checkedAll ? 'Hide all fields' : 'Show all fields'}}">
+            <input type="checkbox" ng-model="sh.checkedAll" ng-change="checkAll(sh)">
+          </span>
+          <input ng-model="sh.searchAll" class="form-control square" placeholder="Filter by all {{sh.title}}">
+          <span class="input-group-btn" ng-click="sh.showFilters=!sh.showFilters">
+            <button class="btn btn-default" ng-if="!sh.showFilters" title="Show filters">▼</button>
+            <button class="btn btn-default" ng-if="sh.showFilters" title="Hide filters">▲</button>
+          </span>
+        </div>
+        <div class="input-group" ng-repeat="item in sh.heading track by $index" ng-if="sh.showFilters && !$first && !$last">
+          <span class="input-group-addon" title="{{sh.checked[$index] ? 'Hide field ' + item : 'Show field ' + item}}">
+            <input type="checkbox" ng-model="sh.checked[$index]" ng-change="check(sh)">
+          </span>
+          <input type="text" ng-model="sh.search[$index]" class="form-control" placeholder="Filter by {{item}}">
+        </div>
+      </form>
+    </div>
+    <ul class="nav nav-tabs" role="tablist">
+      <li ng-repeat="sh in sheets track by $index" ng-class="{active:tab==$index}"><a href="#" ng-click="$parent.tab=$index">{{sh.title}}</a></li>
+    </ul>
+    <div ng-repeat="(shIndex, sh) in sheets track by $index" ng-if="tab==shIndex">
+      <div class="panel panel-default" ng-if="sh.showInfo" ng-style="sh.infoStyle" edit-panel>
+        <ul class="list-group" ng-dblclick="edit()" ng-mouseleave="restoreCurrentItem(sh)">
+          <li class="list-group-item text-center">
+            <img ng-src="{{getImgSrc()}}" class="img-circle" ng-if="!sh.editInfo">
+            <div class="input-group" ng-if="sh.editInfo">
+              <input type="url" ng-model="sh.list[sh.currentItemIndex][sh.heading.length-1]" class="form-control" ng-keydown="keydown($event)">
+              <span class="input-group-addon btn btn-default" title="Save" ng-click="update()">✔</span>
+            </div>
+          </li>
+          <li class="list-group-item" ng-repeat="item in sh.heading track by $index" ng-if="!$first && !$last">
+            <b>{{item}}:</b> {{sh.list[sh.currentItemIndex][$index]}}
+          </li>
+        </ul>
+      </div>
+      <table class="table table-hover" ng-controller="DataCtrl">
+        <thead>
+          <tr>
+            <th ng-repeat="item in sh.heading track by $index" ng-click="sh.sort.index=$index;sh.sort.reverse=!sh.sort.reverse" ng-if="!!sh.checked[$index] && !$first && !$last" title="Sort by {{item}}">
+              {{item}}
+              <span class="pull-right" ng-if="sh.sort.index==$index && !sh.sort.reverse">▼</span>
+              <span class="pull-right" ng-if="sh.sort.index==$index && sh.sort.reverse">▲</span>
+            </th>
+            <th ng-if="validUser"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr ng-if="validUser" create-item>
+            <td ng-repeat="i in new track by $index" ng-if="!!sh.checked[$index] && !$first && !$last">
+              <input class="form-control" placeholder="{{sh.heading[$index]}}" ng-model="new[$index]" ng-keydown="keydown($event)">
+            </td>
+            <td ng-if="sh.showBtns" class="text-center"><button class="btn btn-default" title="Create" ng-click="create()">✔</button></td>
+          </tr>
+          <tr ng-repeat="arr in sh.list | filter:search | filter:sh.search | orderBy:sh.sort.index.toString():sh.sort.reverse | offset: sh.currentPage*itemsPerPage | limitTo: itemsPerPage track by arr[0]" ng-dblclick="edit()" ng-keydown="keydown($event)" ng-mouseover="setCurrentItem($event)" ng-mouseleave="restoreCurrentItem(sh)" ng-click="showInfo($event)" edit-item>
+            <td ng-repeat="(i, val) in arr track by $index" ng-if="!!sh.checked[$index] && !$first && !$last" title="Double click to edit">
+              <input class="form-control" placeholder="{{sh.heading[$index]}}" ng-model="arr[i]" ng-if="isEditing" title="Press escape to stop editing">
+              <span ng-if="!isEditing">{{arr[i]}}</span>
+            </td>
+          <!--   <td ng-if="validUser && sh.showBtns" class="text-center">
+              <button class="btn btn-default" title="Delete" ng-if="!isEditing" ng-click="remove()">✖</button>
+              <button class="btn btn-default" title="Update" ng-if="isEditing" ng-click="update()">✔</button>
+            </td> -->
+          </tr>
+        </tbody>
+        <tfoot>
+        <td colspan="{{sh.heading.length}}">
+          <div class="text-center">
+            <ul class="pagination">
+              <li ng-class="prevPageDisabled()">
+                <a href="#" ng-click="sh.currentPage=0">◄◄</a>
+              </li>
+              <li ng-class="prevPageDisabled()">
+                <a href="#" ng-click="prevPage()">◄</a>
+              </li>
+              <li ng-repeat="n in range()"
+                ng-class="{active: n == sh.currentPage}" ng-click="setPage(n)">
+                <a href="#">{{n+1}}</a>
+              </li>
+              <li ng-class="nextPageDisabled()">
+                <a href="#" ng-click="nextPage()">►</a>
+              </li>
+              <li ng-class="nextPageDisabled()">
+                <a href="#" ng-click="sh.currentPage=pageCount()">►►</a>
+              </li>
+            </ul>
+          </div>
+        </td>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>

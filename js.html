@@ -1,0 +1,293 @@
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.5/angular.min.js"></script>
+<script>
+angular.module('app', [])
+	.controller('MainCtrl', ['$scope', function ($scope) {
+		$scope.gotError = function (e) {
+			console.log('error: ' + e.message);
+		};
+		$scope.sheets = [];
+		$scope.tab = 0;
+		$scope.itemsPerPage = 10;
+		$scope.defaultAvatar = 'https://lh3.googleusercontent.com/-AEQ0rpjmn3k/WhwNPlxSuWI/AAAAAAAACH8/uqHYvCQzbGITpcu9lW8bhCUGXPgrsgRtQCEwYBhgL/w140-h140-p/cartoon.png?sz=100';
+		$scope.check = function (sh) {
+			var props = Object.keys(sh.checked),
+				len = props.length,
+				i = 0,
+				checked = 0;
+			for (; i < len; i += 1) {
+				if (sh.checked[i]) checked++;
+			}
+			sh.checkedAll = checked === len;
+			sh.showBtns = checked !== 1;
+		};
+		$scope.checkAll = function (sh) {
+			for (var prop in sh.checked) {
+				sh.checked[prop] = sh.checkedAll;
+			}
+			sh.showBtns = sh.checkedAll;
+		};
+		$scope.getIndex = function (list, id) {
+			for (var i = 0, len = list.length; i < len; i += 1) {
+				if (list[i].indexOf(id) === 0) return i;
+			}
+		};
+		$scope.restoreCurrentItem = function (sh) {
+			if (!sh.showInfo || !sh.editInfo) return;
+			sh.list[sh.currentItemIndex] = angular.copy(sh.currentItemBak);
+		};
+
+		function gotData(res) {
+			$scope.validUser = res.validUser;
+			var data = angular.copy(res.data),
+				obj, i = 0;
+			Object.keys(data)
+				.forEach(function (sh) {
+					obj = {
+						title: sh,
+						checked: {},
+						showFilters: false,
+						search: {},
+						sort: {
+							index: 0,
+							reverse: false
+						},
+						currentPage: 0,
+						checkedAll: true,
+						showBtns: true,
+						searchAll: ''
+					};
+					obj.heading = data[sh].shift();
+					obj.list = data[sh];
+					obj.heading.forEach(function (s, i) {
+						obj.checked[i] = true;
+					});
+					$scope.sheets.push(obj);
+				});
+			$scope.sheets.sort(function (a, b) {
+				return a.title > b.title ? 1 : -1;
+			});
+			$scope.gotData = true;
+			$scope.$apply();
+		}
+		google.script.run.withSuccessHandler(gotData)
+			.withFailureHandler($scope.gotError)
+			.getData();
+	}])
+	.controller("DataCtrl", ['$scope', function ($scope) {
+		$scope.search = function (arr) {
+			var str = $scope.sh.searchAll.toString();
+			if (!str) return true;
+			var sliced = arr.slice(1, -1),
+				i = sliced.length;
+			while (i--) {
+				if (sliced[i].toString()
+					.toLowerCase()
+					.indexOf(str.toLowerCase()) !== -1) return true;
+			}
+			return false;
+		};
+		$scope.range = function () {
+			var rangeSize = 9;
+			var ret = [];
+			var i = $scope.sh.currentPage;
+			var count = $scope.pageCount() - rangeSize;
+			if (i > count) i = count + 1;
+			var len = i + rangeSize;
+			if (i < 0) i = 0;
+			for (; i < len; i += 1) {
+				ret.push(i);
+			}
+			return ret;
+		};
+		$scope.prevPage = function () {
+			if ($scope.sh.currentPage > 0) {
+				$scope.sh.currentPage--;
+			}
+		};
+		$scope.prevPageDisabled = function () {
+			return $scope.sh.currentPage === 0 ? "disabled" : "";
+		};
+		$scope.pageCount = function () {
+			return Math.ceil($scope.sh.list.length / $scope.itemsPerPage) - 1;
+		};
+		$scope.nextPage = function () {
+			if ($scope.sh.currentPage < $scope.pageCount()) {
+				$scope.sh.currentPage++;
+			}
+		};
+		$scope.nextPageDisabled = function () {
+			return $scope.sh.currentPage === $scope.pageCount() ? "disabled" : "";
+		};
+		$scope.setPage = function (n) {
+			$scope.sh.currentPage = n;
+		};
+	}])
+	.filter('offset', function () {
+		return function (input, start) {
+			start = parseInt(start, 10);
+			return input.slice(start);
+		};
+	})
+	.directive('editItem', ['$timeout', function ($timeout) {
+		return {
+			scope: true,
+			link: function (scope, element) {
+				scope.edit = function () {
+					if (!scope.validUser) return;
+					scope.sh.showInfo = false;
+					scope.isEditing = true;
+					scope.backup = angular.copy(scope.arr);
+					$timeout(function () {
+						element.find('input')[0].select();
+					}, 0, false);
+				};
+				scope.update = function () {
+					if (angular.equals(scope.arr, scope.backup)) return scope.isEditing = false;
+					google.script.run.withSuccessHandler(updated)
+						.withFailureHandler(scope.gotError)
+						.update(scope.sh.title, scope.arr, scope.shIndex, scope.getIndex(scope.sh.list, scope.arr[0]));
+				};
+				scope.remove = function () {
+					google.script.run.withSuccessHandler(removed)
+						.withFailureHandler(scope.gotError)
+						.remove(scope.sh.title, scope.arr[0], scope.shIndex, scope.getIndex(scope.sh.list, scope.arr[0]));
+				};
+				scope.keydown = function (e) {
+					if (e.keyCode === 27) {
+						$timeout(function () {
+							scope.isEditing = false;
+							scope.arr = angular.copy(scope.backup);
+						});
+					}
+					if (e.keyCode === 13) {
+						scope.update();
+					}
+				}
+
+				function updated(res) {
+					if (res.error) return scope.gotError({
+						message: res.error
+					});
+					var sh = scope.sheets[res.shIndex];
+					sh.list[res.itemIndex] = angular.copy(res.data);
+					scope.isEditing = false;
+					scope.$apply();
+				}
+
+				function removed(res) {
+					if (res.error) return gotError({
+						message: res.error
+					});
+					var sh = scope.sheets[res.shIndex];
+					sh.list.splice(res.itemIndex, 1);
+					scope.$apply();
+				}
+				scope.setCurrentItem = function (e) {
+					if (!scope.sh.showInfo /*|| scope.isEditing*/ ) return;
+					scope.sh.infoStyle = {
+						top: e.pageY + 'px',
+						left: e.pageX + 'px'
+					};
+					scope.sh.currentItemIndex = scope.getIndex(scope.sh.list, scope.arr[0]);
+					if (!scope.sh.editInfo) return;
+					scope.sh.currentItemBak = angular.copy(scope.arr);
+				};
+				scope.showInfo = function (e) {
+					if (scope.isEditing) return scope.sh.showInfo = false;
+					scope.sh.showInfo = !scope.sh.showInfo;
+					scope.sh.editInfo = !scope.sh.showInfo;
+					scope.setCurrentItem(e);
+				};
+			}
+		};
+	}])
+	.directive('createItem', function () {
+		return {
+			scope: true,
+			link: function (scope) {
+				scope.sheet = scope.sheets[scope.shIndex];
+				scope.new = createNew();
+				scope.create = function () {
+					if (!isValid()) return;
+					google.script.run.withSuccessHandler(created)
+						.withFailureHandler(scope.gotError)
+						.create(scope.sheet.title, scope.new, scope.shIndex);
+				};
+
+				function created(res) {
+					if (res.error) return scope.gotError({
+						message: res.error
+					});
+					scope.sheet.list.push(angular.copy(res.data));
+					scope.new = createNew();
+					scope.$apply();
+				}
+				scope.keydown = function (e) {
+					if (e.keyCode === 27) {
+						scope.new = createNew();
+					}
+					if (e.keyCode === 13) {
+						scope.create();
+					}
+				}
+
+				function createNew() {
+					return Array.apply(null, new Array(scope.sheet.heading.length))
+						.map(String.prototype.valueOf, '');
+				}
+
+				function isValid() {
+					return scope.new.some(function (s) {
+						return s.length !== 0
+					});
+				}
+			}
+		}
+	})
+	.directive('editPanel', ['$timeout', function ($timeout) {
+		return {
+			scope: true,
+			link: function (scope, element) {
+				scope.edit = function () {
+					if (!scope.validUser) return;
+					scope.sh.editInfo = true;
+					scope.sh.currentItemBak = angular.copy(scope.sh.list[scope.sh.currentItemIndex]);
+					$timeout(function () {
+						element.find('input')[0].select();
+					}, 0, false);
+				};
+				scope.keydown = function (e) {
+					if (e.keyCode === 27) {
+						$timeout(function () {
+							scope.sh.editInfo = false;
+							scope.sh.list[scope.sh.currentItemIndex] = angular.copy(scope.sh.currentItemBak);
+						});
+					}
+					if (e.keyCode === 13) {
+						scope.update();
+					}
+				};
+				scope.getImgSrc = function () {
+					return scope.sh.list[scope.sh.currentItemIndex][scope.sh.heading.length - 1] || scope.defaultAvatar;
+				};
+				scope.update = function () {
+					var arr = scope.sh.list[scope.sh.currentItemIndex];
+					if (angular.equals(arr, scope.sh.currentItemBak)) return scope.sh.editInfo = false;
+					google.script.run.withSuccessHandler(updated)
+						.withFailureHandler(scope.gotError)
+						.update(scope.sh.title, arr, scope.shIndex, scope.getIndex(scope.sh.list, arr[0]));
+				};
+
+				function updated(res) {
+					if (res.error) return scope.gotError({
+						message: res.error
+					});
+					var sh = scope.sheets[res.shIndex];
+					sh.list[res.itemIndex] = angular.copy(res.data);
+					scope.sh.editInfo = false;
+					scope.$apply();
+				}
+			}
+		}
+	}]);
+</script>
